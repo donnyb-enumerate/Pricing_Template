@@ -29,7 +29,7 @@ const AR_FEES = [
 ];
 
 const AP_FEES = [
-  { label: "Automated Invoice Processing (OCR)", value: "$0.50/each", note: "Book price: $1.50/each" },
+  { label: "Automated Invoice Processing (OCR)", value: "$1.50/each", note: "Per invoice processed" },
   { label: "Automated Payment to Vendor", value: "$1.00/each", note: "Prior month billed in the current month" },
 ];
 
@@ -259,7 +259,7 @@ async function generatePDF(config) {
   card(cX+cW+cGap,cTop,cW,"enterprise",config.enterprisePrice,true);
 
   doc.setFontSize(7); doc.setFont("helvetica","normal"); setC(gray);
-  doc.text("Initial 36-month term  |  Onboarding includes data migration + training",W/2,H-48,{align:"center"});
+  doc.text("Initial "+config.contractLength+"-month term  |  Onboarding includes data migration + training",W/2,H-48,{align:"center"});
 
   // ── PAGE 3: PAYMENT SOLUTIONS ──
   doc.addPage(); hdr(3);
@@ -292,14 +292,13 @@ async function generatePDF(config) {
   py=apE+12; doc.setFontSize(7.5); setC(gray);
   doc.text("Automate AP fee is paid by the association in the following month's bill.",M,py);
 
-  py+=26; const tH=85;
+  py+=26; const tH=50;
   setF([240,242,247]); doc.roundedRect(M,py,W-2*M,tH,6,6,"F");
   doc.setFontSize(10); doc.setFont("helvetica","bold"); setC(navy);
   doc.text("Terms & Conditions",M+14,py+18);
   doc.setFontSize(7.5); doc.setFont("helvetica","normal"); setC(darkText);
-  ["  Initial 36-month term","  Pricing valid through January 31, 2026","  Full list of services: goenumerate.com/pricing",
-   "  Subject to Master Subscription Agreement, Payment Processing","  Agreement (AR), and Payment Services Agreement (AP)"]
-  .forEach((t,i)=>doc.text(t,M+14,py+34+i*10));
+  const validDateStr=config.pricingValidDate?new Date(config.pricingValidDate+"T12:00:00").toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"}):"TBD";
+  doc.text("  Initial "+config.contractLength+"-month term  |  Pricing valid through "+validDateStr,M+14,py+34);
 
   // ── PAGE 4: IMPLEMENTATION ──
   doc.addPage(); hdr(4);
@@ -316,9 +315,9 @@ async function generatePDF(config) {
     if(i<4){ setD(lightGray); doc.setLineWidth(1.2); doc.setLineDashPattern([3,3],0);
       doc.line(cx,y+13,cx,y+pS-13); doc.setLineDashPattern([],0); }
     doc.setFontSize(11); doc.setFont("helvetica","bold"); setC(navy); doc.text(p.title,103,y-1);
-    doc.setFontSize(7.5); doc.setFont("helvetica","bold");
-    const tw=doc.getTextWidth(p.title); doc.setFont("helvetica","normal");
-    const bx=103+tw+8, bw=doc.getTextWidth(p.time)+10;
+    const tw=doc.getTextWidth(p.title);
+    doc.setFontSize(7.5); doc.setFont("helvetica","normal");
+    const bx=103+tw+12, bw=doc.getTextWidth(p.time)+10;
     setF([232,237,245]); doc.roundedRect(bx,y-9,bw,13,6,6,"F");
     doc.setFontSize(7.5); setC(medBlue); doc.text(p.time,bx+5,y-1);
     doc.setFontSize(8.5); doc.setFont("helvetica","normal"); setC(darkText); doc.text(p.desc,103,y+16);
@@ -423,6 +422,8 @@ export default function App(){
   const[growthPrice,setGrowthPrice]=useState("");
   const[enterprisePrice,setEnterprisePrice]=useState("");
   const[waiveOnboarding,setWaiveOnboarding]=useState(true);
+  const[contractLength,setContractLength]=useState("36");
+  const[pricingValidDate,setPricingValidDate]=useState(()=>{const d=new Date();d.setDate(d.getDate()+30);return d.toISOString().split("T")[0];});
   const[generating,setGenerating]=useState(false);
   const[activeTab,setActiveTab]=useState("growth");
 
@@ -436,10 +437,10 @@ export default function App(){
 
   const go=useCallback(async()=>{
     setGenerating(true);
-    try{ await generatePDF({accountName:accountName.trim(),repName:repName.trim(),doors,growthPrice:gP,enterprisePrice:eP,waiveOnboarding}); }
+    try{ await generatePDF({accountName:accountName.trim(),repName:repName.trim(),doors,growthPrice:gP,enterprisePrice:eP,waiveOnboarding,contractLength,pricingValidDate}); }
     catch(e){ console.error(e); alert("PDF generation failed: "+e.message); }
     setGenerating(false);
-  },[accountName,repName,doors,gP,eP,waiveOnboarding]);
+  },[accountName,repName,doors,gP,eP,waiveOnboarding,contractLength,pricingValidDate]);
 
   return(
     <div style={{minHeight:"100vh",background:"linear-gradient(135deg, #0F1D35 0%, #1B2A4A 40%, #223558 100%)",fontFamily:"'Segoe UI', system-ui, -apple-system, sans-serif",color:"#E8EDF5"}}>
@@ -463,6 +464,18 @@ export default function App(){
                   <div style={{width:18,height:18,borderRadius:9,background:"#fff",position:"absolute",top:3,left:waiveOnboarding?23:3,transition:"left 0.2s"}}/>
                 </div>Waive Onboarding Fee
               </label>
+            </div>
+            <div>
+              <label style={labelStyle}>Contract Length</label>
+              <div style={{display:"flex",gap:0}}>
+                {["12","24","36"].map(m=>(
+                  <button key={m} onClick={()=>setContractLength(m)} style={{flex:1,padding:"12px 0",background:contractLength===m?"rgba(58,107,197,0.3)":"rgba(15,29,53,0.6)",border:"1px solid",borderColor:contractLength===m?"rgba(58,107,197,0.5)":"rgba(58,107,197,0.2)",borderRadius:m==="12"?"8px 0 0 8px":m==="36"?"0 8px 8px 0":"0",color:contractLength===m?"#fff":"#6B7B95",fontSize:14,fontWeight:contractLength===m?700:400,cursor:"pointer",transition:"all 0.2s"}}>{m} mo</button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <label style={labelStyle}>Pricing Valid Through</label>
+              <input style={inputStyle} type="date" value={pricingValidDate} onChange={e=>setPricingValidDate(e.target.value)}/>
             </div>
           </div>
         </div>
